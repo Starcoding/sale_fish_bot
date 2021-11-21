@@ -121,4 +121,3 @@ def create_customer(username, user_email):
     data = json.dumps({"data": {"type": "customer", "name": username, "email": user_email}})
     response = requests.post('https://api.moltin.com/v2/customers', headers=headers, data=data)
     response.raise_for_status()
-    print(response.text)

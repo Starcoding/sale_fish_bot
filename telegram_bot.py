@@ -12,6 +12,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 
+logger = logging.getLogger(__name__)
 _database = None
 
 
@@ -148,11 +149,8 @@ def handle_users_reply(bot, update):
         'WAITING_EMAIL': waiting_email,
     }
     state_handler = states_functions[user_state]
-    try:
-        next_state = state_handler(bot, update)
-        db.set(chat_id, next_state)
-    except Exception as err:
-        print(err)
+    next_state = state_handler(bot, update)
+    db.set(chat_id, next_state)
 
 
 def get_database_connection():
@@ -166,6 +164,10 @@ def get_database_connection():
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO
+    )
     token = os.getenv("TELEGRAM_TOKEN")
     updater = Updater(token)
     dispatcher = updater.dispatcher
