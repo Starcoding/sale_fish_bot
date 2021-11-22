@@ -4,9 +4,9 @@ import redis
 import json
 from shop_api import (get_products_list, get_product_by_id,
                       get_product_card, get_photo_link_by_product_id,
-                      add_to_cart, get_cart_by_user_id,
-                      get_products_from_cart, remove_item_from_cart,
+                      add_to_cart, remove_item_from_cart,
                       create_customer)
+from bot_functions import send_menu, send_cart
 from telegram.ext import Filters, Updater
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
@@ -14,44 +14,6 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 logger = logging.getLogger(__name__)
 _database = None
-
-
-def send_menu(bot, update):
-    query = update.callback_query
-    keyboard = []
-    for product in get_products_list():
-        keyboard.append([InlineKeyboardButton(product['name'], callback_data=product['id'])])
-    keyboard.append([InlineKeyboardButton('Корзина', callback_data='Cart')])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    if get_cart_by_user_id(query.message.chat_id) == 'Cart is empty!':
-        text = 'Корзина пуста!'
-    else:
-        text = ''.join(get_cart_by_user_id(query.message.chat_id))
-    bot.send_message(chat_id=update.callback_query.message.chat_id,
-                     text='Please choose!', reply_markup=reply_markup)
-    bot.delete_message(chat_id=query.message.chat_id,
-                       message_id=query.message.message_id)
-
-
-def send_cart(bot, update):
-    query = update.callback_query
-    keyboard = []
-    products_in_cart = get_products_from_cart(query.message.chat_id)
-    for product in products_in_cart:
-        keyboard.append([InlineKeyboardButton('Убрать из корзины {}'.format(product['name']),
-                        callback_data=product['id'])])
-    if not get_cart_by_user_id(query.message.chat_id) == 'Cart is empty!':
-        keyboard.append([InlineKeyboardButton('Оплатить', callback_data='Buy')])
-    keyboard.append([InlineKeyboardButton('Назад', callback_data='Back')])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    if get_cart_by_user_id(query.message.chat_id) == 'Cart is empty!':
-        text = 'Cart is empty!'
-    else:
-        text = ''.join(get_cart_by_user_id(query.message.chat_id))
-    bot.send_message(chat_id=update.callback_query.message.chat_id,
-                     text=text, reply_markup=reply_markup)
-    bot.delete_message(chat_id=query.message.chat_id,
-                       message_id=query.message.message_id)
 
 
 def start(bot, update):
@@ -69,22 +31,21 @@ def handle_menu(bot, update):
     if query.data == "Cart":
         send_cart(bot, update)
         return 'HANDLE_CART'
-    else:
-        product_info = get_product_card(get_product_by_id(query.data))
-        image_link = get_photo_link_by_product_id(query.data)
-        keyboard = [
-                    [InlineKeyboardButton('1 кг.', callback_data=json.dumps({'id': query.data, 'quantity': 1})),
-                     InlineKeyboardButton('5 кг.', callback_data=json.dumps({'id': query.data, 'quantity': 5})),
-                     InlineKeyboardButton('10 кг.', callback_data=json.dumps({'id': query.data, 'quantity': 10}))],
-                    [InlineKeyboardButton('Назад', callback_data='Back')]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        bot.send_photo(chat_id=query.message.chat_id, photo=image_link,
-                       caption=product_info,
-                       reply_markup=reply_markup,
-                       )
-        bot.delete_message(chat_id=query.message.chat_id,
-                           message_id=query.message.message_id)
-        return "HANDLE_DESCRIPTION"
+    product_info = get_product_card(get_product_by_id(query.data))
+    image_link = get_photo_link_by_product_id(query.data)
+    keyboard = [
+                [InlineKeyboardButton('1 кг.', callback_data=json.dumps({'id': query.data, 'quantity': 1})),
+                    InlineKeyboardButton('5 кг.', callback_data=json.dumps({'id': query.data, 'quantity': 5})),
+                    InlineKeyboardButton('10 кг.', callback_data=json.dumps({'id': query.data, 'quantity': 10}))],
+                [InlineKeyboardButton('Назад', callback_data='Back')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    bot.send_photo(chat_id=query.message.chat_id, photo=image_link,
+                    caption=product_info,
+                    reply_markup=reply_markup,
+                    )
+    bot.delete_message(chat_id=query.message.chat_id,
+                        message_id=query.message.message_id)
+    return "HANDLE_DESCRIPTION"
 
 
 def handle_description(bot, update):
@@ -92,14 +53,13 @@ def handle_description(bot, update):
     if query.data == 'Back':
         send_menu(bot, update)
         return "HANDLE_MENU"
-    else:
-        product_id = json.loads(query.data)['id']
-        quantity = json.loads(query.data)['quantity']
-        add_to_cart(query.message.chat_id, product_id, quantity)
-        bot.answer_callback_query(callback_query_id=query.id,
-                                  text='Товар успешно добавлен в корзину!',
-                                  show_alert=True)
-        return "HANDLE_DESCRIPTION"
+    product_id = json.loads(query.data)['id']
+    quantity = json.loads(query.data)['quantity']
+    add_to_cart(query.message.chat_id, product_id, quantity)
+    bot.answer_callback_query(callback_query_id=query.id,
+                                text='Товар успешно добавлен в корзину!',
+                                show_alert=True)
+    return "HANDLE_DESCRIPTION"
 
 
 def handle_cart(bot, update):

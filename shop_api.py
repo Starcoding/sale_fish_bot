@@ -1,17 +1,30 @@
 import os
 import json
 import requests
+import redis
+from datetime import datetime
+from db_api import get_database_connection
 
+
+def request_new_token(db):
+    data = {
+                'client_id': os.environ['CLIENT_ID'],
+                'grant_type': 'implicit'
+                }
+    response = requests.post('https://api.moltin.com/oauth/access_token', data=data)
+    response.raise_for_status()
+    db.set('auth_credentials', response.text)
+    return response.json()['access_token']
 
 def get_access_token():
-    data = {
-            'client_id': os.environ['CLIENT_ID'],
-            'grant_type': 'implicit'
-            }
-    response_with_access_token = requests.post('https://api.moltin.com/oauth/access_token', data=data)
-    response_with_access_token.raise_for_status()
-    access_token = response_with_access_token.json()['access_token']
-    return access_token
+    db = get_database_connection()
+    auth_credentials = json.loads(db.get('auth_credentials'))
+    if auth_credentials:
+        when_expires = auth_credentials['expires']
+        if datetime.timestamp(datetime.now()) > when_expires:
+            return request_new_token(db)
+        return auth_credentials['access_token']
+    return request_new_token(db)
 
 
 def get_products_list():
@@ -42,10 +55,9 @@ def get_cart_by_user_id(user_id):
         }
     cart_items_response = requests.get(f'https://api.moltin.com/v2/carts/{user_id}/items', headers=headers)
     cart_items_response.raise_for_status()
-    try:
-        cart_products = cart_items_response.json()['data']
-    except TypeError:
-        return 'Cart is empty!'
+    cart_products = cart_items_response.json()['data']
+    if not cart_products:
+        return
     for product in cart_products:
         product_name = product['name']
         product_description = product['description']
@@ -58,8 +70,6 @@ def get_cart_by_user_id(user_id):
     cart_total_response.raise_for_status()
     cart_total = 'Total: {}'.format(cart_total_response.json()['data']['meta']['display_price']['with_tax']['formatted'])
     cart.append(cart_total)
-    if not cart_products:
-        return 'Cart is empty!'
     return cart
 
 
