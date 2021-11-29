@@ -3,7 +3,7 @@ import json
 import requests
 import redis
 from datetime import datetime
-from db_api import get_database_connection
+from db_connect import get_database_connection
 
 
 def request_new_token(db):
@@ -18,12 +18,14 @@ def request_new_token(db):
 
 def get_access_token():
     db = get_database_connection()
-    auth_credentials = json.loads(db.get('auth_credentials'))
-    if auth_credentials:
-        when_expires = auth_credentials['expires']
-        if datetime.timestamp(datetime.now()) > when_expires:
-            return request_new_token(db)
-        return auth_credentials['access_token']
+    try:
+        auth_credentials = json.loads(db.get('auth_credentials'))
+        if auth_credentials:
+            if datetime.now().timestamp() > auth_credentials['expires']:
+                return request_new_token(db)
+            return auth_credentials['access_token']
+    except:
+        return request_new_token(db)
     return request_new_token(db)
 
 
@@ -48,31 +50,6 @@ def add_to_cart(user_id, product_id, quantity):
     add_to_cart_response.raise_for_status()
 
 
-def get_cart_by_user_id(user_id):
-    cart = []
-    headers = {
-            'Authorization': f'Bearer {get_access_token()}',
-        }
-    cart_items_response = requests.get(f'https://api.moltin.com/v2/carts/{user_id}/items', headers=headers)
-    cart_items_response.raise_for_status()
-    cart_products = cart_items_response.json()['data']
-    if not cart_products:
-        return
-    for product in cart_products:
-        product_name = product['name']
-        product_description = product['description']
-        product_price = product['meta']['display_price']['with_tax']['unit']['formatted']
-        product_value = product['meta']['display_price']['with_tax']['value']['formatted']
-        product_quantity = product['quantity']
-        cart.append(f'{product_name}\n\n{product_price} per kg\n\n{product_description}\n{product_quantity}кг in cart for {product_value}\n\n')
-    cart_total_response = requests.get(f'https://api.moltin.com/v2/carts/{user_id}',
-                                       headers=headers)
-    cart_total_response.raise_for_status()
-    cart_total = 'Total: {}'.format(cart_total_response.json()['data']['meta']['display_price']['with_tax']['formatted'])
-    cart.append(cart_total)
-    return cart
-
-
 def get_products_from_cart(user_id):
     headers = {
             'Authorization': f'Bearer {get_access_token()}',
@@ -83,7 +60,7 @@ def get_products_from_cart(user_id):
         cart_products = cart_items_response.json()['data']
         return cart_products
     except TypeError:
-        return 'Cart is empty!'
+        return
 
 
 def get_product_by_id(product_id):

@@ -1,5 +1,26 @@
-from shop_api import get_products_list, get_cart_by_user_id, get_products_from_cart
+import requests
+from shop_api import get_products_list, get_products_from_cart, get_access_token
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+
+def get_cart_by_user_id(user_id):
+    cart = []
+    cart_products = get_products_from_cart(user_id)
+    if not cart_products:
+        return
+    for product in cart_products:
+        product_name = product['name']
+        product_description = product['description']
+        product_price = product['meta']['display_price']['with_tax']['unit']['formatted']
+        product_value = product['meta']['display_price']['with_tax']['value']['formatted']
+        product_quantity = product['quantity']
+        cart.append(f'{product_name}\n\n{product_price} per kg\n\n{product_description}\n{product_quantity}кг in cart for {product_value}\n\n')
+    cart_total_response = requests.get(f'https://api.moltin.com/v2/carts/{user_id}',
+                                       headers=headers)
+    cart_total_response.raise_for_status()
+    cart_total = 'Total: {}'.format(cart_total_response.json()['data']['meta']['display_price']['with_tax']['formatted'])
+    cart.append(cart_total)
+    return cart
 
 
 def send_menu(bot, update):
